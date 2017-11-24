@@ -32,6 +32,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+bool less(struct list_elem *e1 , struct list_elem *e2 , void *aux);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -57,6 +59,13 @@ sema_init (struct semaphore *sema, unsigned value)
    interrupt handler.  This function may be called with
    interrupts disabled, but if it sleeps then the next scheduled
    thread will probably turn interrupts back on. */
+bool less(struct list_elem *e1 , struct list_elem *e2 , void *aux){
+
+  struct thread* t1 = list_entry(e1, struct thread ,elem);
+  struct thread* t2 = list_entry(e2 ,struct thread ,elem);
+  return t1->priority > t2->priority;
+}
+
 void
 sema_down (struct semaphore *sema)
 {
@@ -68,7 +77,9 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   sema->value--;
   if(sema->value < 0){
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered (&sema->waiters, &thread_current()->elem,
+                              less, NULL);
+      //list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
   }
   intr_set_level (old_level);

@@ -100,7 +100,7 @@ sub parse_command_line {
 	  or exit 1;
     }
 
-    $sim = "qemu" if !defined $sim;
+    $sim = "bochs" if !defined $sim;
     $debug = "none" if !defined $debug;
     $vga = exists ($ENV{DISPLAY}) ? "window" : "none" if !defined $vga;
 
@@ -632,6 +632,7 @@ sub run_qemu {
     push (@cmd, '-S') if $debug eq 'monitor';
     push (@cmd, '-s', '-S') if $debug eq 'gdb';
     push (@cmd, '-monitor', 'null') if $vga eq 'none' && $debug eq 'none';
+    push (@cmd, '-no-reboot');
     run_command (@cmd);
 }
 
@@ -908,7 +909,7 @@ sub get_load_average {
 # Calls setitimer to set a timeout, then execs what was passed to us.
 sub exec_setitimer {
     if (defined $timeout) {
-	if (1) {
+	if ($^V ge 5.8.0) {
 	    eval "
               use Time::HiRes qw(setitimer ITIMER_VIRTUAL);
               setitimer (ITIMER_VIRTUAL, $timeout, 0);
@@ -924,15 +925,15 @@ sub exec_setitimer {
     exit (1);
 }
 
-#sub SIGVTALRM {
-#    use Config;
-#    my $i = 0;
-#    foreach my $name (split(' ', $Config{sig_name})) {
-#     return $i if $name eq 'VTALRM';
-#	     $i++;
-#    }
-#    return 0;
-#}
+sub SIGVTALRM {
+    use Config;
+    my $i = 0;
+    foreach my $name (split(' ', $Config{sig_name})) {
+	return $i if $name eq 'VTALRM';
+	$i++;
+    }
+    return 0;
+}
 
 # find_in_path ($program)
 #

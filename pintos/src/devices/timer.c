@@ -41,7 +41,7 @@ static struct list list;
 
 void foreach (void);
 
-
+bool less3(struct list_elem *e1 , struct list_elem *e2 , void *aux);
 
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
@@ -112,7 +112,12 @@ timer_sleep (int64_t ticks)
   old_level = intr_disable ();
   //the time to be finished in.
   thread_current()->time = ticks + timer_ticks();
-  list_push_back (&list ,&thread_current()->elem);
+
+  list_insert_ordered (&list, &thread_current()->elem,
+                            less3, NULL);
+
+  //list_push_back (&list ,&thread_current()->elem);
+
   thread_block();
   intr_set_level (old_level);
 }
@@ -289,4 +294,11 @@ real_time_delay (int64_t num, int32_t denom)
      the possibility of overflow. */
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000));
+}
+
+bool less3(struct list_elem *e1 , struct list_elem *e2 , void *aux){
+
+  struct thread* t1 = list_entry(e1, struct thread ,elem);
+  struct thread* t2 = list_entry(e2 ,struct thread ,elem);
+  return t1->priority > t2->priority;
 }

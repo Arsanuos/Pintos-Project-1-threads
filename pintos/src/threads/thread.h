@@ -100,8 +100,11 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-	
+    /* time at which the thread should wakeup. */
     int64_t time;
+
+    /* to store the priority for priority donnation. */
+    int last_pri;
   };
 
 /* If false (default), use round-robin scheduler.
