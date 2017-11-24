@@ -39,7 +39,7 @@ static void real_time_delay (int64_t num, int32_t denom);
 /*nnnnnnnnnnn*/
 static struct list list;
 
-
+void foreach (void);
 
 
 
@@ -189,10 +189,11 @@ timer_print_stats (void)
 
 void foreach (void)
 {
+  if(list_empty(&list)){
+    return;
+  }
   struct thread *t;
   struct list_elem *e;
-  if(list_empty(&list)) return;
-  ASSERT (intr_get_level () == INTR_OFF);
   e = list_begin(&list);
   while(e != list_end(&list)){
     t = list_entry (e, struct thread, elem);
