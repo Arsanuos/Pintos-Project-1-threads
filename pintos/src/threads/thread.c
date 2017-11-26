@@ -370,7 +370,7 @@ thread_set_priority (int new_priority)
 
     thread_current ()->priority = new_priority;
     thread_current() ->intial_pri = new_priority;
-    //thread_yield();
+    thread_yield();
     }
   }
 
