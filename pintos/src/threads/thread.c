@@ -212,11 +212,12 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+
   //what if the created thread have
   //a priority that is greater than the running.
   if (thread_current()->priority < t->priority )
         thread_yield();
-
   return tid;
 }
 
@@ -244,7 +245,7 @@ thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
-   bool less2(struct list_elem *e1 , struct list_elem *e2 , void *aux){
+bool less2(struct list_elem *e1 , struct list_elem *e2 , void *aux){
 
      struct thread* t1 = list_entry(e1, struct thread ,elem);
      struct thread* t2 = list_entry(e2 ,struct thread ,elem);
@@ -310,6 +311,17 @@ thread_exit (void)
 #ifdef USERPROG
   process_exit ();
 #endif
+
+  //remove all held locks.
+  struct lock *l;
+  struct list_elem *e;
+  e = list_begin(&thread_current()->locks);
+  while(e != list_end(&thread_current()->locks)){
+    l = list_entry (e, struct lock, lock_elem);
+    lock_release(l);
+    e = list_remove(e);
+  }
+
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -389,7 +401,6 @@ void thread_donate(struct thread *holder,int new_priority){
 }
 
 void thread_return_donation(struct thread* holder ,int new_priority){
-  /*ASSERT(new_priority <= holder->priority);
   holder->priority = new_priority;
   //holder now is running and it will move out from the lock
   //the question is does it should continue execute or another
@@ -399,7 +410,6 @@ void thread_return_donation(struct thread* holder ,int new_priority){
     //then preempt.
     thread_yield();
   }
-  */
 }
 
 /* Returns the current thread's priority. */
@@ -526,6 +536,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->intial_pri = priority;
   t->magic = THREAD_MAGIC;
+  list_init(&t->locks);
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -555,7 +566,6 @@ next_thread_to_run (void)
       return idle_thread;
     }
   else{
-    list_sort(&ready_list,less2,NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 
