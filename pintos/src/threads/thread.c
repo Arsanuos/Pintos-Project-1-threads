@@ -122,6 +122,7 @@ thread_start (void)
 
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
+
 void
 thread_tick (void)
 {
@@ -211,6 +212,10 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  //what if the created thread have
+  //a priority that is greater than the running.
+  if (thread_current()->priority < t->priority )
+        thread_yield();
 
   return tid;
 }
@@ -257,7 +262,7 @@ thread_unblock (struct thread *t)
   //insert by priority
   list_insert_ordered (&ready_list, &t->elem,
                             less2, NULL);
-  //list_push_back (&ready_list, &t->elem);
+  //list_push_back (&ready_list, &t->elem);;
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -345,7 +350,6 @@ thread_foreach (thread_action_func *func, void *aux)
 {
   struct list_elem *e;
   ASSERT (intr_get_level () == INTR_OFF);
-
   for (e = list_begin (&all_list); e != list_end (&all_list);
        e = list_next (e))
     {
@@ -358,16 +362,44 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority)
 {
-  if(new_priority > thread_get_priority()){
+  if(new_priority >= thread_get_priority()){
     //no preemption.
     thread_current ()->priority = new_priority;
+    thread_current() ->intial_pri = new_priority;
   }else{
 
     thread_current ()->priority = new_priority;
-    if(!list_empty(&ready_list)){
-     thread_yield();
+    thread_current() ->intial_pri = new_priority;
+    //thread_yield();
     }
   }
+
+
+void thread_donate(struct thread *holder,int new_priority){
+  holder->priority = new_priority;
+  //holder may be running or blocked due to low priority
+  if(holder != thread_current())
+  {
+    //then it's not running so check priority
+    if(holder->priority > thread_current()->priority){
+      //we must preempt the running thread
+      thread_yield();
+    }
+  }
+}
+
+void thread_return_donation(struct thread* holder ,int new_priority){
+  /*ASSERT(new_priority <= holder->priority);
+  holder->priority = new_priority;
+  //holder now is running and it will move out from the lock
+  //the question is does it should continue execute or another
+  //thread may run.
+  if(!list_empty(&ready_list) &&
+  list_entry(list_begin(&ready_list),struct thread , elem)->priority > holder->priority){
+    //then preempt.
+    thread_yield();
+  }
+  */
 }
 
 /* Returns the current thread's priority. */
@@ -492,6 +524,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->intial_pri = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
@@ -518,9 +551,14 @@ static struct thread *
 next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
-    return idle_thread;
-  else
+    {
+      return idle_thread;
+    }
+  else{
+    list_sort(&ready_list,less2,NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
+
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -582,11 +620,9 @@ schedule (void)
   struct thread *cur = running_thread ();
   struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
-
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
-
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);

@@ -17,9 +17,6 @@
 #error TIMER_FREQ <= 1000 recommended
 #endif
 
-/* lock for the blocking threads inside time_sleep() function,
-it's being called also inside timer_interrupt() */
-struct lock timerLock;
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
@@ -37,7 +34,7 @@ static void real_time_delay (int64_t num, int32_t denom);
 
 
 /*nnnnnnnnnnn*/
-static struct list list;
+struct list list;
 
 void foreach (void);
 
@@ -51,8 +48,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-  lock_init (&timerLock);
-  list_init (&list);
+  list_init(&list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -192,6 +188,8 @@ timer_print_stats (void)
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
+
+/* Timer interrupt handler. */
 void foreach (void)
 {
   if(list_empty(&list)){
@@ -215,8 +213,6 @@ void foreach (void)
   //printf("finished\n");
 }
 
-
-/* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
@@ -234,6 +230,7 @@ too_many_loops (unsigned loops)
   int64_t start = ticks;
   while (ticks == start)
     barrier ();
+
 
   /* Run LOOPS loops. */
   start = ticks;

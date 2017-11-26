@@ -104,7 +104,7 @@ struct thread
     int64_t time;
 
     /* to store the priority for priority donnation. */
-    int last_pri;
+    int intial_pri;
   };
 
 /* If false (default), use round-robin scheduler.

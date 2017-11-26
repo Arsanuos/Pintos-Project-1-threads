@@ -279,10 +279,6 @@ list_pop_back (struct list *list)
 struct list_elem *
 list_front (struct list *list)
 {
-  if(list_empty(list)){
-    debug_backtrace_all();
-    return;
-  }
   ASSERT (!list_empty (list));
   return list->head.next;
 }

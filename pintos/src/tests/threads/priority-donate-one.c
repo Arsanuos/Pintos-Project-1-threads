@@ -60,6 +60,8 @@ acquire2_thread_func (void *lock_)
 
   lock_acquire (lock);
   msg ("acquire2: got the lock");
+  //printf("holder:%s  current:%s\n",lock->holder->name,thread_current()->name);
+//  lock->holder = thread_current();
   lock_release (lock);
   msg ("acquire2: done");
 }
