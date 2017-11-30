@@ -136,6 +136,9 @@ sema_up (struct semaphore *sema)
     list_sort(&sema->waiters, greater, NULL);
     struct thread *t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
     thread_unblock(t);
+    if(t != NULL && thread_current()->priority < t->priority){
+          thread_yield();
+    }
   }
   intr_set_level (old_level);
 }
@@ -199,39 +202,6 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
-// what is this function ??
-/*
-void sema_alt(struct semaphore *sema, struct lock *lock){
-  enum intr_level old_level;
-
-  ASSERT (sema != NULL);
-  ASSERT (!intr_context ());
-
-  old_level = intr_disable ();
-
-  while(sema->value == 0 || lock->holder != NULL){
-      list_insert_ordered (&sema->waiters, &thread_current()->elem,
-                              less, NULL);
-      //list_push_back (&sema->waiters, &thread_current ()->elem);
-      thread_block ();
-  }
-  sema->value--;
-  intr_set_level (old_level);
-}*/
-
-// what is this comparator ??
-/*
-bool comparator(struct list_elem *e1 ,struct list_elem *e2,void* aux){
-  struct lock  *lock1 = list_entry(e1 , struct lock , lock_elem);
-  struct lock  *lock2 = list_entry(e2 , struct lock , lock_elem);
-  struct semaphore *sema1 = &lock1->semaphore;
-  struct semaphore *sema2 = &lock2->semaphore;
-
-  return list_entry(list_begin(&sema1->waiters),struct thread ,elem)->priority >
-   list_entry(list_begin(&sema2->waiters),struct thread ,elem)->priority;
-}*/
-
-
 
 bool greater_comparator_sort_lock_priority(struct list_elem *e1, struct list_elem *e2, void* aux){
   struct lock *lock1 = list_entry(e1 , struct lock , lock_elem);
@@ -293,33 +263,6 @@ lock_try_acquire (struct lock *lock)
   if (success)
     lock->holder = thread_current ();
   return success;
-}
-
-// what is this function ??
-int max_donation(struct list* list){
-  printf("1\n");
-  ASSERT(list != NULL);
-  ASSERT(!list_empty(&list));
-  printf("1\n");
-  int max_priority = 0;
-  struct lock *lock;
-  struct semaphore *sema;
-  struct list_elem *e;
-  printf("1\n");
-  for(e = list_begin(&list);e != list_end(&list);e = list_next(e)){
-    printf("1\n");
-    lock = list_entry(e , struct lock , lock_elem);
-    printf("2\n");
-    sema = &lock->semaphore;
-    printf("3\n");
-    int tmp = list_entry(list_begin(&sema->waiters),struct thread ,elem)->priority;
-    printf("4\n");
-    if(tmp > max_priority){
-      max_priority = tmp;
-    }
-    printf("5\n");
-  }
-  return max_priority;
 }
 
 

@@ -11,6 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/floated.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -20,23 +22,13 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
-/* List of processes in THREAD_READY state, that is, processes
-   that are ready to run but not actually running. */
-static struct list ready_list;
 
-/* List of all processes.  Processes are added to this list
-   when they are first scheduled and removed when they exit. */
-static struct list all_list;
-
-/* Idle thread. */
-static struct thread *idle_thread;
 
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
-
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
@@ -186,6 +178,25 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  /*The initial thread starts with a nice value of zero.
+    Other threads start with a nice value inherited from their parent thread. */
+  if(thread_current() != idle_thread){
+    t->nice = thread_current()->nice;
+  }
+  else{
+    t->nice = 0;
+  }
+
+  /*The initial thread starts with a recent_cpu value of zero.
+    Other threads start with a recent_cpu value inherited from their parent thread. */
+  if(thread_current() != idle_thread){
+    t->recent_cpu = thread_current()->recent_cpu;
+  }
+  else{
+    t->recent_cpu = 0;
+  }
+
+
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack'
      member cannot be observed. */
@@ -236,6 +247,7 @@ thread_block (void)
   schedule ();
 }
 
+
 /* less comparator to compare between two threads with their priorities. */
 bool greater_priority_comparator(struct list_elem *e1 , struct list_elem *e2 , void *aux){
    struct thread* t1 = list_entry(e1, struct thread, elem);
@@ -267,6 +279,13 @@ thread_unblock (struct thread *t)
   list_insert_ordered (&ready_list, &t->elem,
                             greater_priority_comparator, NULL);
   t->status = THREAD_READY;
+
+  // thew unblocked thread has prioirty greater than the current thread so make preemption
+  /*
+  if(thread_current() != idle_thread && t->priority > thread_current()->priority){
+    thread_yield();
+  }
+  */
 
   intr_set_level (old_level);
 }
@@ -391,45 +410,14 @@ thread_set_priority (int new_priority)
   else{
     if(thread_current()->priority < new_priority)thread_current()->priority = new_priority;
   }
+
   thread_yield();
 
 }
 
 
-// Amr
-// this thread donate to thread which hold the required_lock with its priority as it Wants thread
-// thread to_thread to finish fast to be able to exeute and hold the required_lock
-void thread_donate2(struct thread *from_thread){
-  if(from_thread->required_lock == NULL){
-    schedule();
-    return;
-  }
-
-  struct thread *holder_thread = from_thread->required_lock->holder;
-  if(holder_thread == NULL || holder_thread->priority >= from_thread->priority){
-    schedule();
-    return;
-  }
-
-  holder_thread->priority = from_thread->priority;
-
-  struct list_elem *e;
-  struct lock * holded_lock;
-  for(e = list_begin(&from_thread->locks);e != list_end(&from_thread->locks);e = list_next(e)){
-    holded_lock = list_entry(e, struct lock, lock_elem);
-    struct list waiting_threads_on_lock = holded_lock->semaphore.waiters;
-  }
-
-  thread_donate2(holder_thread);
-}
-
-
-//arsanous
 void thread_donate(struct thread *holder,int new_priority){
   holder->priority = new_priority;
-  //thread_yield();
-  //return;
-  //holder may be running or blocked due to low priority
   if(holder != thread_current())
   {
     //then it's not running so check priority
@@ -441,70 +429,6 @@ void thread_donate(struct thread *holder,int new_priority){
 }
 
 
-
-// amr
-void thread_return_donation2(struct lock *released_lock){
-  struct thread *from_thread = thread_current();
-  if(list_empty(&from_thread->locks) == true)return;
-  int max_priority = 0;
-  struct list_elem *e = list_begin(&from_thread->locks);
-
-  while(e != list_end(&from_thread->locks)){
-    struct lock *holded_lock = list_entry(e, struct lock, lock_elem);
-    if(holded_lock == released_lock){
-        e = list_remove(e);
-    }
-    else{
-        struct list_elem *list_elem_thread;
-
-
-        for(list_elem_thread = list_begin(&holded_lock->semaphore.waiters);list_elem_thread != list_end(&holded_lock->semaphore.waiters); list_elem_thread = list_next(list_elem_thread)){
-          struct thread *t = list_entry(list_elem_thread, struct thread, elem);
-          max_priority = (max_priority > t->priority ? max_priority : t->priority);
-        }
-        e = list_next(e);
-    }
-  }
-  from_thread->priority = (max_priority > from_thread->original_priority ? max_priority : from_thread->original_priority);
-
-  thread_yield();
-}
-
-
-
-void thread_return_donation3(struct thread *holded_thread, struct lock *released_lock){
-  struct list holded_locks = holded_thread->locks;
-  if(list_empty(&holded_locks)){
-    holded_thread->priority = holded_thread->original_priority;
-    //donate to the others as it maybe require for other
-  }
-  else{
-    holded_thread->priority = list_entry(list_front(&holded_locks), struct lock, lock_elem)->priority;
-  }
-  //thread_yield();
-}
-
-
-void arsanous(struct lock *lock){
-  if(!list_empty(&thread_current()->locks)){
-    struct list_elem *e;
-    e = list_begin(&thread_current()->locks);
-    struct lock *l;
-    l = list_entry(e, struct lock, lock_elem);
-    struct semaphore *sema = &l->semaphore;
-    if(!list_empty(&sema->waiters)){
-      int tmp = list_entry(list_begin(&sema->waiters),struct thread ,elem)->priority;
-      thread_return_donation(thread_current(), tmp);
-    }else{
-      thread_return_donation(thread_current(), lock->priority);
-    }
-  }else{
-    thread_return_donation(thread_current(),lock->priority);
-  }
-}
-
-
-// arsanous
 void thread_return_donation(struct thread* holder, int new_priority){
   holder->priority = new_priority;
   //holder now is running and it will move out from the lock
@@ -528,31 +452,38 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED)
 {
-  /* Not yet implemented. */
+
+  thread_current()->nice = nice;
+
+  // compute the new priority value of the thread by the equation
+  thread_current()->priority = PRI_MAX - CONVERT_TO_INT_NEAREST(DIV(CONVERT_TO_FP(thread_current()->recent_cpu), CONVERT_TO_FP(4))) -
+                               (thread_current()->nice * 2);
+
+  if(thread_current()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority){
+      thread_yield();
+  }
+
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return 100 * load_avg;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return 100 * thread_current()->recent_cpu;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.

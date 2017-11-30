@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/floated.h"
 
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -92,7 +93,7 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
-/* Less comparator to compare two threads to decide which thread
+/* greater comparator to compare two threads to decide which thread
    will insert before the other. */
 
 bool greater_compare_by_priority(struct list_elem *e1 , struct list_elem *e2 , void *aux){
@@ -112,6 +113,7 @@ timer_sleep (int64_t ticks)
 
   enum intr_level old_level;
   old_level = intr_disable ();
+
   //the time to be finished in.
   thread_current()->time = ticks + timer_ticks();
   list_insert_ordered (&list, &thread_current()->elem, greater_compare_by_priority, NULL);
@@ -216,6 +218,41 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick();
+
+  bool feedback = false;
+  if(feedback){
+    //start BSD
+    /* updating the load average value every second. */
+    if(timer_ticks () % TIMER_FREQ == 0){
+      load_avg = ADD(MUL(DIV(CONVERT_TO_FP(59), CONVERT_TO_FP(60)) , load_avg) ,
+                  MUL_INT(DIV(CONVERT_TO_FP(1), CONVERT_TO_FP(60)), (int) list_size(&ready_list)) );
+    }
+
+    /* updating the recent_cpu value for all threads every second not every tick and then recalculate their priority value*/
+    if(thread_current() != idle_thread){
+      thread_current()->recent_cpu++;
+    }
+
+    /* updating the recent_cpu value for all threads every second not every tick and then recalculate their priority value*/
+    if(timer_ticks () % TIMER_FREQ == 0){
+      struct list_elem *e;
+      for(e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)){
+          struct thread *t = list_entry(e, struct thread, elem);
+          t->recent_cpu = CONVERT_TO_INT_TOWARD_ZERO(ADD_INT(MUL_INT(DIV(MUL_INT(load_avg, 2),
+                            ADD_INT(MUL_INT(load_avg, 2), 1)) , t->recent_cpu) , t->nice));
+          t->priority = PRI_MAX - CONVERT_TO_INT_TOWARD_ZERO(DIV(CONVERT_TO_FP(t->recent_cpu), CONVERT_TO_FP(4))) -(t->nice * 2);
+      }
+    }
+    else{
+      if(thread_current() != idle_thread){
+        int y = CONVERT_TO_INT_TOWARD_ZERO(DIV(CONVERT_TO_FP(thread_current()->recent_cpu), CONVERT_TO_FP(4)));
+        thread_current()->priority = PRI_MAX - (y) -(thread_current()->nice * 2);
+      }
+    }
+    // sort ready list && block list
+    // list_sort(&ready_list, greater_priority_comparator)
+  }
+
   foreach();
 }
 
