@@ -15,8 +15,6 @@
 #include "userprog/process.h"
 #endif
 
-bool less2(struct list_elem *e1 , struct list_elem *e2 , void *aux);
-
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -216,6 +214,7 @@ thread_create (const char *name, int priority,
 
   //what if the created thread have
   //a priority that is greater than the running.
+
   if (thread_current()->priority < t->priority )
         thread_yield();
   return tid;
@@ -237,6 +236,15 @@ thread_block (void)
   schedule ();
 }
 
+/* less comparator to compare between two threads with their priorities. */
+bool greater_priority_comparator(struct list_elem *e1 , struct list_elem *e2 , void *aux){
+   struct thread* t1 = list_entry(e1, struct thread, elem);
+   struct thread* t2 = list_entry(e2, struct thread, elem);
+   return t1->priority > t2->priority;
+}
+
+
+
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -245,12 +253,7 @@ thread_block (void)
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
-bool less2(struct list_elem *e1 , struct list_elem *e2 , void *aux){
 
-     struct thread* t1 = list_entry(e1, struct thread ,elem);
-     struct thread* t2 = list_entry(e2 ,struct thread ,elem);
-     return t1->priority > t2->priority;
-   }
 void
 thread_unblock (struct thread *t)
 {
@@ -262,9 +265,9 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   //insert by priority
   list_insert_ordered (&ready_list, &t->elem,
-                            less2, NULL);
-  //list_push_back (&ready_list, &t->elem);;
+                            greater_priority_comparator, NULL);
   t->status = THREAD_READY;
+
   intr_set_level (old_level);
 }
 
@@ -281,7 +284,7 @@ thread_name (void)
 struct thread *
 thread_current (void)
 {
-  struct thread *t = running_thread ();
+  struct thread *t =  running_thread ();
 
   /* Make sure T is really a thread.
      If either of these assertions fire, then your thread may
@@ -312,6 +315,10 @@ thread_exit (void)
   process_exit ();
 #endif
 
+  // should we handle the case if the thread require lock then it exits before taking the lock
+  // and also remove donated values for the holder of the lock ??
+
+
   //remove all held locks.
   struct lock *l;
   struct list_elem *e;
@@ -326,6 +333,7 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
+
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
@@ -347,7 +355,7 @@ thread_yield (void)
   if (cur != idle_thread)
   {
     list_insert_ordered (&ready_list, &cur->elem,
-                              less2, NULL);
+                              greater_priority_comparator, NULL);
     //list_push_back (&ready_list, &cur->elem);
   }
   cur->status = THREAD_READY;
@@ -374,21 +382,53 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority)
 {
-  if(new_priority >= thread_get_priority()){
-    //no preemption.
-    thread_current ()->priority = new_priority;
-    thread_current() ->intial_pri = new_priority;
-  }else{
 
-    thread_current ()->priority = new_priority;
-    thread_current() ->intial_pri = new_priority;
-    thread_yield();
-    }
+  thread_current()->original_priority = new_priority;
+
+  if(list_empty(&thread_current()->locks)){
+    thread_current()->priority = new_priority;
+  }
+  else{
+    if(thread_current()->priority < new_priority)thread_current()->priority = new_priority;
+  }
+  thread_yield();
+
+}
+
+
+// Amr
+// this thread donate to thread which hold the required_lock with its priority as it Wants thread
+// thread to_thread to finish fast to be able to exeute and hold the required_lock
+void thread_donate2(struct thread *from_thread){
+  if(from_thread->required_lock == NULL){
+    schedule();
+    return;
   }
 
+  struct thread *holder_thread = from_thread->required_lock->holder;
+  if(holder_thread == NULL || holder_thread->priority >= from_thread->priority){
+    schedule();
+    return;
+  }
 
+  holder_thread->priority = from_thread->priority;
+
+  struct list_elem *e;
+  struct lock * holded_lock;
+  for(e = list_begin(&from_thread->locks);e != list_end(&from_thread->locks);e = list_next(e)){
+    holded_lock = list_entry(e, struct lock, lock_elem);
+    struct list waiting_threads_on_lock = holded_lock->semaphore.waiters;
+  }
+
+  thread_donate2(holder_thread);
+}
+
+
+//arsanous
 void thread_donate(struct thread *holder,int new_priority){
   holder->priority = new_priority;
+  //thread_yield();
+  //return;
   //holder may be running or blocked due to low priority
   if(holder != thread_current())
   {
@@ -400,7 +440,72 @@ void thread_donate(struct thread *holder,int new_priority){
   }
 }
 
-void thread_return_donation(struct thread* holder ,int new_priority){
+
+
+// amr
+void thread_return_donation2(struct lock *released_lock){
+  struct thread *from_thread = thread_current();
+  if(list_empty(&from_thread->locks) == true)return;
+  int max_priority = 0;
+  struct list_elem *e = list_begin(&from_thread->locks);
+
+  while(e != list_end(&from_thread->locks)){
+    struct lock *holded_lock = list_entry(e, struct lock, lock_elem);
+    if(holded_lock == released_lock){
+        e = list_remove(e);
+    }
+    else{
+        struct list_elem *list_elem_thread;
+
+
+        for(list_elem_thread = list_begin(&holded_lock->semaphore.waiters);list_elem_thread != list_end(&holded_lock->semaphore.waiters); list_elem_thread = list_next(list_elem_thread)){
+          struct thread *t = list_entry(list_elem_thread, struct thread, elem);
+          max_priority = (max_priority > t->priority ? max_priority : t->priority);
+        }
+        e = list_next(e);
+    }
+  }
+  from_thread->priority = (max_priority > from_thread->original_priority ? max_priority : from_thread->original_priority);
+
+  thread_yield();
+}
+
+
+
+void thread_return_donation3(struct thread *holded_thread, struct lock *released_lock){
+  struct list holded_locks = holded_thread->locks;
+  if(list_empty(&holded_locks)){
+    holded_thread->priority = holded_thread->original_priority;
+    //donate to the others as it maybe require for other
+  }
+  else{
+    holded_thread->priority = list_entry(list_front(&holded_locks), struct lock, lock_elem)->priority;
+  }
+  //thread_yield();
+}
+
+
+void arsanous(struct lock *lock){
+  if(!list_empty(&thread_current()->locks)){
+    struct list_elem *e;
+    e = list_begin(&thread_current()->locks);
+    struct lock *l;
+    l = list_entry(e, struct lock, lock_elem);
+    struct semaphore *sema = &l->semaphore;
+    if(!list_empty(&sema->waiters)){
+      int tmp = list_entry(list_begin(&sema->waiters),struct thread ,elem)->priority;
+      thread_return_donation(thread_current(), tmp);
+    }else{
+      thread_return_donation(thread_current(), lock->priority);
+    }
+  }else{
+    thread_return_donation(thread_current(),lock->priority);
+  }
+}
+
+
+// arsanous
+void thread_return_donation(struct thread* holder, int new_priority){
   holder->priority = new_priority;
   //holder now is running and it will move out from the lock
   //the question is does it should continue execute or another
@@ -416,7 +521,7 @@ void thread_return_donation(struct thread* holder ,int new_priority){
 int
 thread_get_priority (void)
 {
-  return thread_current ()->priority;
+  return thread_current()->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -534,10 +639,12 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->intial_pri = priority;
+  t->original_priority = priority;
+
   t->magic = THREAD_MAGIC;
   list_init(&t->locks);
-  list_push_back (&all_list, &t->allelem);
+  t->required_lock = NULL;
+  list_push_back(&all_list, &t->allelem);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

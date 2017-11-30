@@ -32,13 +32,9 @@ static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
 
-
-/*nnnnnnnnnnn*/
+// added with us
 struct list list;
-
 void foreach (void);
-
-bool less3(struct list_elem *e1 , struct list_elem *e2 , void *aux);
 
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
@@ -96,6 +92,16 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
+/* Less comparator to compare two threads to decide which thread
+   will insert before the other. */
+
+bool greater_compare_by_priority(struct list_elem *e1 , struct list_elem *e2 , void *aux){
+  struct thread* t1 = list_entry(e1, struct thread ,elem);
+  struct thread* t2 = list_entry(e2 ,struct thread ,elem);
+  return t1->priority > t2->priority;
+}
+
+
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 void
@@ -108,12 +114,7 @@ timer_sleep (int64_t ticks)
   old_level = intr_disable ();
   //the time to be finished in.
   thread_current()->time = ticks + timer_ticks();
-
-  list_insert_ordered (&list, &thread_current()->elem,
-                            less3, NULL);
-
-  //list_push_back (&list ,&thread_current()->elem);
-
+  list_insert_ordered (&list, &thread_current()->elem, greater_compare_by_priority, NULL);
   thread_block();
   intr_set_level (old_level);
 }
@@ -196,28 +197,25 @@ void foreach (void)
     return;
   }
   struct thread *t;
-  struct list_elem *e;
-  e = list_begin(&list);
+  struct list_elem *e = list_begin(&list);
   while(e != list_end(&list)){
     t = list_entry (e, struct thread, elem);
     if(t->time <= timer_ticks()){
-      //printf ("current: %"PRId64"\n", timer_ticks() );
-      //printf ("time: %"PRId64"\n", t->time);
       t->time = 0;
       e = list_remove(e);
       thread_unblock(t);
-    }else{
+    } else{
       e = list_next(e);
     }
   }
-  //printf("finished\n");
+  //thread_yield();
 }
 
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
+  thread_tick();
   foreach();
 }
 
@@ -291,11 +289,4 @@ real_time_delay (int64_t num, int32_t denom)
      the possibility of overflow. */
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000));
-}
-
-bool less3(struct list_elem *e1 , struct list_elem *e2 , void *aux){
-
-  struct thread* t1 = list_entry(e1, struct thread ,elem);
-  struct thread* t2 = list_entry(e2 ,struct thread ,elem);
-  return t1->priority > t2->priority;
 }

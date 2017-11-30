@@ -92,7 +92,28 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct list locks;                  /*list of locks to be released before exit */
+
+
+    // we add our extra arguments here ...
+
+
+
+    /*list of locks to be released before exit */
+    struct list locks;
+
+    /* the required lock which thread waits for to be unblocked. */
+    struct lock *required_lock;
+
+    /* time at which the thread should wakeup. */
+    int64_t time;
+
+    /* to store the priority for priority donnation. */
+    int original_priority;
+
+
+
+
+    // end of parameters ...
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -101,11 +122,7 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-    /* time at which the thread should wakeup. */
-    int64_t time;
 
-    /* to store the priority for priority donnation. */
-    int intial_pri;
   };
 
 /* If false (default), use round-robin scheduler.
