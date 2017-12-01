@@ -300,8 +300,10 @@ list_size (struct list *list)
   struct list_elem *e;
   size_t cnt = 0;
 
-  for (e = list_begin (list); e != list_end (list); e = list_next (e))
-    cnt++;
+  for (e = list_begin (list); e != list_end (list); e = list_next (e)){
+      cnt++;
+      if(e == NULL)break;
+  }
   return cnt;
 }
 

@@ -91,6 +91,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  load_avg = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -459,9 +461,9 @@ thread_set_nice (int nice UNUSED)
   thread_current()->priority = PRI_MAX - CONVERT_TO_INT_NEAREST(DIV(CONVERT_TO_FP(thread_current()->recent_cpu), CONVERT_TO_FP(4))) -
                                (thread_current()->nice * 2);
 
-  if(thread_current()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority){
-      thread_yield();
-  }
+  //if(thread_current()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority){
+  //    thread_yield();
+  //}
 
 }
 
@@ -476,7 +478,9 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void)
 {
-  return 100 * load_avg;
+  printf("unscaled = %d\n scaled = %d\n",load_avg, CONVERT_TO_INT_NEAREST(100 * load_avg));
+  return CONVERT_TO_INT_NEAREST(100 * load_avg);
+
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */

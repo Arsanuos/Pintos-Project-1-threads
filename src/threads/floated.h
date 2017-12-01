@@ -4,7 +4,6 @@
 
 #define F (1 << Q)
 
-
 #define CONVERT_TO_FP(n) ((n) * (F))
 
 #define CONVERT_TO_INT_TOWARD_ZERO(x) ((x) / (F))

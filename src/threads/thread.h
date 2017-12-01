@@ -4,27 +4,24 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
+#include "threads/synch.h"
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
-static struct list ready_list;
+struct list ready_list;
 
 /* the load average of the system which is used to estimate the average number of threads
     ready to run over the past minute. Like recent_cpu,
     it is an exponentially weighted moving average. Unlike priority and recent_cpu,
     load_avg is system-wide, not thread-specific. */
-static int load_avg;
-
+int load_avg;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
-static struct list all_list;
-
-
+struct list all_list;
 
 /* Idle thread. */
-static struct thread *idle_thread;
+struct thread *idle_thread;
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -135,7 +132,7 @@ struct thread
     int nice;
 
     /* recent cpu time taken for that thread. */
-    int recent_cpu;
+    int64_t recent_cpu;
 
 
 
