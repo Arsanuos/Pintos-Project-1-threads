@@ -479,7 +479,7 @@ int
 thread_get_load_avg (void)
 {
   //printf("unscaled = %d\n scaled = %d\n",load_avg, CONVERT_TO_INT_NEAREST(100 * load_avg));
-  return CONVERT_TO_INT_NEAREST(100 * load_avg);
+  return CONVERT_TO_INT_NEAREST(MUL_INT(load_avg, 100));
 
 }
 
@@ -487,7 +487,7 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void)
 {
-  return 100 * thread_current()->recent_cpu;
+  return CONVERT_TO_INT_NEAREST(MUL_INT(thread_current()->recent_cpu, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.

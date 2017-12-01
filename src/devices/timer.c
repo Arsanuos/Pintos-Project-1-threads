@@ -218,15 +218,11 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
 
   ticks++;
-  //printf("timer interruot\n");
-
-  thread_tick();
 
   if(thread_mlfqs){
     //foreach();
 
     //start BSD
-    //printf("%s = %d\n", "\nstart BCD", timer_ticks());
 
     /* updating the recent_cpu value for all threads e`very second not every tick and then recalculate their priority value*/
     if(thread_current() != idle_thread){
@@ -236,47 +232,27 @@ timer_interrupt (struct intr_frame *args UNUSED)
     /* updating the load average value every second. */
 
     if(ticks % TIMER_FREQ == 0){
-      //printf("updaing load avg\n");
       int ready_running_threads = list_empty(&ready_list) ? 0 : list_size(&ready_list);
       if(thread_current() != idle_thread) ready_running_threads++;
 
-      //printf("initial load = %d\n",load_avg);
-
+      /* load_avg = (59/60)*load_avg + (1/60)*ready_threads, */
       load_avg = ADD(DIV_INT(MUL_INT(load_avg, 59), 60) ,
                     DIV_INT(CONVERT_TO_FP(ready_running_threads), 60));
-
-                    /*
-      load_avg = ADD(MUL(DIV(CONVERT_TO_FP(59), CONVERT_TO_FP(60)) , load_avg) ,
-                  MUL_INT(DIV(CONVERT_TO_FP(1), CONVERT_TO_FP(60)), ready_running_threads) );
-                  */
-      //printf("new value = %d\n",load_avg);
     }
 
 
     /* updating the recent_cpu value for all threads every second not every tick and then recalculate their priority value*/
     if(timer_ticks () % TIMER_FREQ == 0){
       struct list_elem *e;
-      //printf("start updaing recent_cpu values\n");
-      int ind = 0;
+      struct thread *t;
       for(e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)){
-          struct thread *t = list_entry(e, struct thread, allelem);
+          t = list_entry(e, struct thread, allelem);
           if(t == idle_thread) continue;
-          //printf("%d\n",ind);
-          //printf("load = %d\n",load_avg);
-          //if(t == NULL)printf("error\n");
-          //printf("asdsdsa");
-          //printf("cpu = %d\n",t->recent_cpu);
 
-          t->recent_cpu = (int64_t) CONVERT_TO_INT_TOWARD_ZERO(ADD_INT(MUL_INT(DIV(MUL_INT(load_avg, 2),
-                            ADD_INT(MUL_INT(load_avg, 2), 1)) , t->recent_cpu) , t->nice));
-
-          //printf("%d\n",ind);
-          //printf("%d\n",ind);
-
-          if(e == NULL)break;
-          //printf("%d\n",ind);
+          /* recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice. */
+          t->recent_cpu = ADD_INT(MUL(DIV(MUL_INT(load_avg, 2),
+                            ADD_INT(MUL_INT(load_avg, 2), 1)) , t->recent_cpu) , t->nice);
       }
-      //printf("finish updaing recent_cpu values\n");
     }
 
     if(timer_ticks() % 4 == 0){
@@ -286,19 +262,18 @@ timer_interrupt (struct intr_frame *args UNUSED)
           struct thread *t = list_entry(e, struct thread, allelem);
           if(t == idle_thread) continue;
 
-          t->priority = PRI_MAX - CONVERT_TO_INT_TOWARD_ZERO(DIV(CONVERT_TO_FP(t->recent_cpu), CONVERT_TO_FP(4))) -(t->nice * 2);
-
+          /*  priority = PRI_MAX - (recent_cpu / 4) - (nice * 2). */
+          t->priority = PRI_MAX - CONVERT_TO_INT_TOWARD_ZERO(DIV_INT(t->recent_cpu, 4)) - (t->nice * 2);
           t->priority = (t->priority > PRI_MAX) ? PRI_MAX : (t->priority < PRI_MIN ? PRI_MIN : t->priority) ;
 
           if(e == NULL)break;
-
       }
+      if(!list_empty(&ready_list))
+        list_sort(&ready_list, greater_compare_by_priority, NULL);
     }
-
-    // sort ready list && block list
-    list_sort(&ready_list, greater_compare_by_priority, NULL);
   }
 
+  thread_tick();
   foreach();
 }
 
