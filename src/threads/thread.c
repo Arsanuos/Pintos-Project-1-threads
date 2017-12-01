@@ -478,7 +478,7 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void)
 {
-  printf("unscaled = %d\n scaled = %d\n",load_avg, CONVERT_TO_INT_NEAREST(100 * load_avg));
+  //printf("unscaled = %d\n scaled = %d\n",load_avg, CONVERT_TO_INT_NEAREST(100 * load_avg));
   return CONVERT_TO_INT_NEAREST(100 * load_avg);
 
 }

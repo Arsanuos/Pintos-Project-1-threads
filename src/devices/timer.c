@@ -249,7 +249,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
       load_avg = ADD(MUL(DIV(CONVERT_TO_FP(59), CONVERT_TO_FP(60)) , load_avg) ,
                   MUL_INT(DIV(CONVERT_TO_FP(1), CONVERT_TO_FP(60)), ready_running_threads) );
                   */
-      printf("new value = %d\n",load_avg);
+      //printf("new value = %d\n",load_avg);
     }
 
 
@@ -296,7 +296,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
     }
 
     // sort ready list && block list
-    // list_sort(&ready_list, greater_priority_comparator)
+    list_sort(&ready_list, greater_compare_by_priority, NULL);
   }
 
   foreach();
